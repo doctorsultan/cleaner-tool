@@ -476,9 +476,7 @@ class CleanerTool:
 
 
 def main():
-    print("=" * 55)
-    print("  Cleaner Tool")
-    print("=" * 55)
+    print("Cleaner Tool")
     session_id = input("\nSession ID: ").strip()
     print("\n[1] Remove Likes\n[2] Remove Reposts\n[3] Remove Saved Posts"
           "\n[4] Remove Comments\n[5] All of the above")
