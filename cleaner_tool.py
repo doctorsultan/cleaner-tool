@@ -140,9 +140,11 @@ class CleanerTool:
         except Exception:
             pass
 
-    def login(self) -> bool:
+    def login(self, _attempt: int = 0) -> bool:
         if self.user_id:
             return True
+        if _attempt >= 5:
+            return False
         r = self._get("https://i.instagram.com/api/v1/accounts/current_user/")
         if r is None:
             return False
@@ -158,7 +160,7 @@ class CleanerTool:
         if "automated" in r.text.lower():
             self._dismiss_challenge()
             time.sleep(5)
-            return self.login()
+            return self.login(_attempt + 1)
         return False
 
     def _unlike_one(self, media_id: str, media_type: str) -> bool:
@@ -296,10 +298,18 @@ class CleanerTool:
 
     def run_unrepost(self):
         self._report("Removing reposts...")
+        # media_repost_screen doesn't paginate cleanly - a re-fetch can
+        # return ids already handled in an earlier loop iteration (confirmed
+        # live: fetch -> delete 1 -> re-fetch came back with MORE ids than
+        # before, not fewer). Without tracking what's already been sent to
+        # _delete_reposts, those repeats get deleted again and re-counted,
+        # inflating total_unreposted far past the real number of reposts.
+        seen = set()
         while True:
-            ids = self._fetch_reposts()
+            ids = [i for i in self._fetch_reposts() if i not in seen]
             if not ids:
                 break
+            seen.update(ids)
             if not self._delete_reposts(ids):
                 removed = 0
                 for mid in ids:
@@ -456,10 +466,20 @@ class CleanerTool:
 
     def run_remove_comments(self):
         self._report("Removing comments...")
+        # comments_screen doesn't paginate cleanly - a re-fetch can return
+        # pairs already handled in an earlier loop iteration (confirmed
+        # live: fetch -> delete 1 -> re-fetch came back with MORE pairs than
+        # before, not fewer, and the deleted one was correctly gone). Without
+        # tracking what's already been sent to _delete_comments, those
+        # repeats get deleted again and re-counted, inflating
+        # total_comments_deleted far past the real number of comments -
+        # this is why the tool reported 36 when only ~3 were real.
+        seen = set()
         while True:
-            pairs = self._fetch_comments()
+            pairs = [p for p in self._fetch_comments() if p not in seen]
             if not pairs:
                 break
+            seen.update(pairs)
             if not self._delete_comments(pairs):
                 removed = 0
                 for pair in pairs:
